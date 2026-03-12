@@ -529,6 +529,147 @@ function playSound(type) {
     } catch(e) {}
 }
 
+// ─── MUSIC ENGINE ───────────────────────────────
+let musicNodes = [], musicTimeout = null, currentTheme = null;
+
+const THEMES = {
+    menu: {
+        bpm: 72, vol: 0.18,
+        melody: [
+            [523,0.5],[659,0.5],[784,0.5],[1047,1],[784,0.5],[659,0.5],
+            [523,0.5],[440,0.5],[392,1],[0,0.5],
+            [392,0.5],[523,0.5],[659,0.5],[784,1],[659,0.5],[523,0.5],
+            [440,0.5],[392,0.5],[523,2],[0,0.5]
+        ],
+        bass: [
+            [131,2],[165,2],[196,2],[131,2],
+            [110,2],[131,2],[165,2],[196,2]
+        ],
+        melodyType:'sine', bassType:'triangle'
+    },
+    arena: {
+        bpm: 140, vol: 0.16,
+        melody: [
+            [784,0.5],[784,0.25],[880,0.25],[784,0.5],[698,0.5],
+            [784,0.5],[0,0.5],[523,0.5],[659,0.5],
+            [698,0.5],[698,0.25],[784,0.25],[698,0.5],[622,0.5],
+            [659,0.5],[0,0.5],[494,0.5],[587,0.5],
+            [659,0.5],[784,0.5],[880,0.5],[1047,1],[0,0.5],
+            [784,0.5],[698,0.5],[659,0.5],[587,0.5],[523,1],[0,0.5]
+        ],
+        bass: [
+            [131,1],[131,0.5],[131,0.5],[196,1],[165,1],
+            [131,1],[131,0.5],[131,0.5],[175,1],[196,1],
+            [110,1],[110,0.5],[110,0.5],[165,1],[147,1],
+            [131,1],[131,0.5],[196,0.5],[220,1],[196,1]
+        ],
+        melodyType:'square', bassType:'sawtooth'
+    },
+    boss: {
+        bpm: 160, vol: 0.2,
+        melody: [
+            [466,0.25],[0,0.25],[466,0.25],[0,0.25],[554,0.5],[466,0.5],
+            [415,0.25],[0,0.25],[415,0.25],[0,0.25],[494,0.5],[415,0.5],
+            [370,0.25],[0,0.25],[370,0.25],[0,0.25],[440,0.5],[370,0.5],
+            [311,0.5],[370,0.5],[415,0.5],[466,1],[0,0.5]
+        ],
+        bass: [
+            [110,0.5],[0,0.5],[110,0.5],[0,0.5],
+            [98,0.5],[0,0.5],[98,0.5],[0,0.5],
+            [87,0.5],[0,0.5],[87,0.5],[0,0.5],
+            [78,0.5],[87,0.5],[98,0.5],[110,0.5]
+        ],
+        melodyType:'sawtooth', bassType:'sawtooth'
+    }
+};
+
+function startMusic(theme) {
+    if (!soundEnabled || !audioCtx) return;
+    if (currentTheme === theme) return;
+    stopMusic();
+    currentTheme = theme;
+    scheduleMusic(theme);
+}
+
+function stopMusic() {
+    currentTheme = null;
+    if (musicTimeout) { clearTimeout(musicTimeout); musicTimeout = null; }
+    musicNodes.forEach(n => { try { n.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1); setTimeout(()=>{ try{n.osc.stop();}catch(e){} }, 300); } catch(e){} });
+    musicNodes = [];
+}
+
+function scheduleMusic(theme) {
+    if (currentTheme !== theme || !soundEnabled || !audioCtx) return;
+    const t = THEMES[theme];
+    const beat = 60 / t.bpm;
+    const masterGain = audioCtx.createGain();
+    masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    masterGain.gain.linearRampToValueAtTime(t.vol, audioCtx.currentTime + 0.5);
+    masterGain.connect(audioCtx.destination);
+
+    // Add subtle reverb via delay
+    const delay = audioCtx.createDelay(0.3);
+    delay.delayTime.value = 0.12;
+    const delayGain = audioCtx.createGain();
+    delayGain.gain.value = 0.2;
+    masterGain.connect(delay);
+    delay.connect(delayGain);
+    delayGain.connect(masterGain);
+
+    let totalBeats = 0;
+    // Play melody
+    let mTime = audioCtx.currentTime + 0.05;
+    for (const [freq, dur] of t.melody) {
+        if (freq > 0) {
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.type = t.melodyType;
+            osc.frequency.value = freq;
+            // Slight vibrato
+            const lfo = audioCtx.createOscillator();
+            const lfoGain = audioCtx.createGain();
+            lfo.frequency.value = 5; lfoGain.gain.value = 3;
+            lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+            lfo.start(mTime); lfo.stop(mTime + dur*beat);
+            g.gain.setValueAtTime(0.001, mTime);
+            g.gain.linearRampToValueAtTime(0.7, mTime + 0.02);
+            g.gain.setValueAtTime(0.7, mTime + dur*beat - 0.05);
+            g.gain.linearRampToValueAtTime(0.001, mTime + dur*beat);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(mTime); osc.stop(mTime + dur*beat + 0.05);
+            musicNodes.push({osc, gain:g});
+        }
+        mTime += dur * beat;
+        if (dur > 0) totalBeats += dur;
+    }
+
+    // Play bass
+    let bTime = audioCtx.currentTime + 0.05;
+    for (const [freq, dur] of t.bass) {
+        if (freq > 0) {
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.type = t.bassType;
+            osc.frequency.value = freq;
+            g.gain.setValueAtTime(0.001, bTime);
+            g.gain.linearRampToValueAtTime(0.9, bTime + 0.03);
+            g.gain.setValueAtTime(0.9, bTime + dur*beat - 0.06);
+            g.gain.linearRampToValueAtTime(0.001, bTime + dur*beat);
+            osc.connect(g); g.connect(masterGain);
+            osc.start(bTime); osc.stop(bTime + dur*beat + 0.05);
+            musicNodes.push({osc, gain:g});
+        }
+        bTime += dur * beat;
+    }
+
+    // Loop
+    const loopDuration = Math.max(mTime, bTime) - audioCtx.currentTime + 0.1;
+    musicTimeout = setTimeout(() => {
+        musicNodes = [];
+        scheduleMusic(theme);
+    }, loopDuration * 1000);
+}
+
 // ─── SNAKE FACTORY ──────────────────────────────
 function createSnake(x, y, color, name, isPlayer) {
     const s = {
@@ -759,6 +900,7 @@ function createBoss() {
 
 function transitionToBoss() {
     gamePhase = 'boss';
+    startMusic('boss');
     document.getElementById('countdownOverlay').style.display = 'none';
     document.getElementById('leaderboard').style.display = 'none';
     document.getElementById('timerDisplay').style.display = 'none';
@@ -1262,10 +1404,12 @@ function returnToMenu() {
     document.getElementById('leaderboard').style.display = 'block';
     document.getElementById('timerDisplay').style.display = 'block';
     showScreen('menuScreen');
+    startMusic('menu');
 }
 
 function startGame() {
     initAudio(); playSound('start');
+    startMusic('arena');
     const pName = document.getElementById('playerName').value.trim() || 'Player';
     const startLen = 10 + upgradeLevels.startingLength * 5;
 
@@ -1460,8 +1604,7 @@ window.addEventListener('load', () => {
 // Unlock audio on first user interaction (required by iOS Safari)
 function unlockAudio() {
     initAudio();
-    document.removeEventListener('touchstart', unlockAudio);
-    document.removeEventListener('mousedown', unlockAudio);
+    if (gamePhase === 'menu') startMusic('menu');
 }
 document.addEventListener('touchstart', unlockAudio, { once: true });
 document.addEventListener('mousedown', unlockAudio, { once: true });
@@ -1475,7 +1618,12 @@ document.addEventListener('mouseup',e=>{if(e.button===0)isBoosting=false;});
 document.addEventListener('touchmove',e=>{e.preventDefault();mouseX=e.touches[0].clientX;mouseY=e.touches[0].clientY;const c=document.getElementById('cursor');c.style.left=mouseX+'px';c.style.top=mouseY+'px';},{passive:false});
 document.addEventListener('touchstart',e=>{isBoosting=true;mouseX=e.touches[0].clientX;mouseY=e.touches[0].clientY;},{passive:false});
 document.addEventListener('touchend',()=>{isBoosting=false;});
-document.getElementById('soundToggle').addEventListener('click',function(){soundEnabled=!soundEnabled;this.textContent=soundEnabled?'Sound: ON':'Sound: OFF';});
+document.getElementById('soundToggle').addEventListener('click',function(){
+    soundEnabled=!soundEnabled;
+    this.textContent=soundEnabled?'Sound: ON':'Sound: OFF';
+    if(soundEnabled){ const theme=gamePhase==='boss'?'boss':gamePhase==='menu'?'menu':'arena'; startMusic(theme); }
+    else stopMusic();
+});
 document.addEventListener('keydown',e=>{
     if(e.code==='Enter'&&!gameRunning){
         const m=document.getElementById('menuScreen'),g=document.getElementById('gameOverScreen');
