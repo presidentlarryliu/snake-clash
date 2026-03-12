@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Snake Clash</title>
+    <title>Snake Attack</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -33,7 +33,7 @@
             background-clip: text; position: relative; z-index: 2;
         }
         .menu-title::after {
-            content: 'SNAKE CLASH'; position: absolute; inset: 0;
+            content: 'SNAKE ATTACK'; position: absolute; inset: 0;
             background: linear-gradient(135deg, #4ecca3 0%, #45e0d6 40%, #a78bfa 100%);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
             background-clip: text; filter: blur(20px); opacity: 0.5; z-index: -1;
@@ -279,7 +279,7 @@
 
 <!-- MENU -->
 <div id="menuScreen" class="screen-overlay" style="display:flex">
-    <h1 class="menu-title">SNAKE CLASH</h1>
+    <h1 class="menu-title">SNAKE ATTACK</h1>
     <p class="menu-subtitle">Eat &middot; Grow &middot; Dominate</p>
     <div class="gem-display"><span class="gem-icon">&#x1F48E;</span> <span class="gem-count" id="menuGemCount">0</span></div>
     <div class="menu-form">
