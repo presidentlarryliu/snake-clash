@@ -468,7 +468,8 @@ function saveSave() {
 let audioCtx = null, soundEnabled = true;
 function initAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx.state === 'suspended') return audioCtx.resume();
+    return Promise.resolve();
 }
 function playSound(type) {
     if (!soundEnabled || !audioCtx) return;
@@ -1259,7 +1260,7 @@ function returnToMenu() {
 }
 
 function startGame() {
-    initAudio();
+    initAudio().then(() => playSound('start'));
     const pName = document.getElementById('playerName').value.trim() || 'Player';
     const startLen = 10 + upgradeLevels.startingLength * 5;
 
@@ -1286,7 +1287,6 @@ function startGame() {
     gameRunning=true; gamePhase='arena';
     lastTime=performance.now(); accumulator=0;
     requestAnimationFrame(gameLoop);
-    playSound('start');
 }
 
 function endMatch() {
