@@ -467,9 +467,14 @@ function saveSave() {
 // ─── AUDIO ──────────────────────────────────────
 let audioCtx = null, soundEnabled = true;
 function initAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') return audioCtx.resume();
-    return Promise.resolve();
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // iOS: play a silent buffer immediately to unlock audio
+        const buf = audioCtx.createBuffer(1, 1, 22050);
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf; src.connect(audioCtx.destination); src.start(0);
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 function playSound(type) {
     if (!soundEnabled || !audioCtx) return;
@@ -1260,7 +1265,7 @@ function returnToMenu() {
 }
 
 function startGame() {
-    initAudio().then(() => playSound('start'));
+    initAudio(); playSound('start');
     const pName = document.getElementById('playerName').value.trim() || 'Player';
     const startLen = 10 + upgradeLevels.startingLength * 5;
 
@@ -1451,6 +1456,15 @@ window.addEventListener('load', () => {
         cc.appendChild(sw);
     });
 });
+
+// Unlock audio on first user interaction (required by iOS Safari)
+function unlockAudio() {
+    initAudio();
+    document.removeEventListener('touchstart', unlockAudio);
+    document.removeEventListener('mousedown', unlockAudio);
+}
+document.addEventListener('touchstart', unlockAudio, { once: true });
+document.addEventListener('mousedown', unlockAudio, { once: true });
 
 window.addEventListener('resize',()=>{if(canvas)resizeCanvas();});
 document.addEventListener('mousemove',e=>{mouseX=e.clientX;mouseY=e.clientY;const c=document.getElementById('cursor');c.style.left=e.clientX+'px';c.style.top=e.clientY+'px';});
